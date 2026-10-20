@@ -28,6 +28,13 @@ const PIECES = [
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
+const THEMES = {
+  dark: { grid: '#22222e', highlight: 'rgba(255,255,255,0.12)', ghostAlpha: 0.2 },
+  light: { grid: '#e1e3ec', highlight: 'rgba(255,255,255,0.35)', ghostAlpha: 0.3 },
+};
+const THEME_KEY = 'tetris-theme';
+let currentTheme = 'dark';
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -163,13 +170,13 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   context.fillStyle = color;
   context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
   // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
+  context.fillStyle = THEMES[currentTheme].highlight;
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
   context.globalAlpha = 1;
 }
 
 function drawGrid() {
-  ctx.strokeStyle = '#22222e';
+  ctx.strokeStyle = THEMES[currentTheme].grid;
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -199,7 +206,7 @@ function draw() {
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       if (current.shape[r][c])
-        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
+        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, THEMES[currentTheme].ghostAlpha);
 
   // current piece
   for (let r = 0; r < current.shape.length; r++)
@@ -301,4 +308,28 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 
+const themeToggle = document.getElementById('theme-toggle');
+
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.dataset.theme = theme;
+  const isLight = theme === 'light';
+  themeToggle.setAttribute('aria-checked', String(isLight));
+  themeToggle.setAttribute('aria-label', isLight ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
+  // repintar aunque el juego esté en pausa o terminado
+  if (current) draw();
+  if (next) drawNext();
+}
+
+themeToggle.addEventListener('click', () => {
+  const theme = currentTheme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* ignorar */ }
+  applyTheme(theme);
+  themeToggle.blur(); // evita que Space active el botón durante el juego
+});
+
+let savedTheme = null;
+try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) { /* ignorar */ }
+
 init();
+applyTheme(savedTheme === 'light' ? 'light' : 'dark');
