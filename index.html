@@ -16,6 +16,11 @@
       <span>Claro</span>
     </button>
 
+    <label class="powerup-option">
+      <input type="checkbox" id="powerup-toggle" checked />
+      <span>Power-ups</span>
+    </label>
+
     <div class="game-area">
     <div class="game-container">
       <canvas id="board" width="300" height="600"></canvas>
@@ -37,6 +42,8 @@
         <div class="panel-section">
           <span class="label">NEXT</span>
           <canvas id="next-canvas" width="120" height="120"></canvas>
+          <span class="next-name" id="next-name"></span>
+          <span class="freeze hidden" id="freeze"></span>
         </div>
 
         <div class="panel-section controls">
