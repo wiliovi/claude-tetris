@@ -139,6 +139,19 @@ body {
   padding-top: 4px;
 }
 
+.panel-left {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.panel-left .panel-section {
+  align-items: flex-end;
+}
+
+.panel-left .powerup-option {
+  justify-content: flex-end;
+}
+
 .panel-section {
   display: flex;
   flex-direction: column;
@@ -274,4 +287,11 @@ kbd {
 
 .freeze.hidden {
   display: none;
+}
+
+.botones
+{
+  display: flex;
+  justify-content: center;
+  gap: 10px;
 }
