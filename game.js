@@ -14,7 +14,22 @@ const COLORS = [
   '#7986cb', // J - indigo
   '#ffb74d', // L - orange
   '#f06292', // H - pink (hollow square)
+  '#b0bec5', // comodín (tinte)
 ];
+
+const WILD = 9;
+
+// Power-ups: pieza de 1 bloque; `color` indica la pieza cuyo color toman
+const POWERS = {
+  bomb:      { name: 'Bomba',    color: 2, glyph: '💣' },
+  lightning: { name: 'Rayo',     color: 4, glyph: '⚡' },
+  tint:      { name: 'Tinte',    color: 4, glyph: '🎨' },
+  gravity:   { name: 'Gravedad', color: 1, glyph: '⬇' },
+  freeze:    { name: 'Congelar', color: 3, glyph: '❄' },
+};
+const POWER_KEYS = Object.keys(POWERS);
+const FREEZE_MS = 5000;
+const POWERUPS_KEY = 'tetris-powerups';
 
 const PIECES = [
   null,
@@ -48,14 +63,37 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
+const nextNameEl = document.getElementById('next-name');
+const freezeEl = document.getElementById('freeze');
+const powerToggle = document.getElementById('powerup-toggle');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let powerupsEnabled = true, powerPending, nextPowerAt, freezeLeft;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
+// Líneas hasta el siguiente power-up: aumenta con el nivel (menos frecuente)
+function powerInterval() {
+  return Math.min(12, 3 + level);
+}
+
+function powerPiece() {
+  const power = POWER_KEYS[Math.floor(Math.random() * POWER_KEYS.length)];
+  const color = POWERS[power].color;
+  return { type: color, power, shape: [[color]], x: Math.floor(COLS / 2), y: 0 };
+}
+
+function glyphOf(piece) {
+  return piece.power ? POWERS[piece.power].glyph : null;
+}
+
 function randomPiece() {
+  if (powerupsEnabled && powerPending) {
+    powerPending = false;
+    return powerPiece();
+  }
   const type = Math.floor(Math.random() * (PIECES.length - 1)) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
@@ -112,12 +150,62 @@ function clearLines() {
       r++;
     }
   }
-  if (cleared) {
-    lines += cleared;
-    score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
-    updateHUD();
+  addLines(cleared);
+}
+
+function addLines(cleared) {
+  if (!cleared) return;
+  lines += cleared;
+  score += (LINE_SCORES[Math.min(cleared, 4)] || 0) * level;
+  level = Math.floor(lines / 10) + 1;
+  dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+  if (lines >= nextPowerAt) {
+    powerPending = true;
+    nextPowerAt = lines + powerInterval();
+  }
+  updateHUD();
+}
+
+function removeRow(r) {
+  board.splice(r, 1);
+  board.unshift(new Array(COLS).fill(0));
+}
+
+function compactBoard() {
+  for (let c = 0; c < COLS; c++) {
+    const col = [];
+    for (let r = 0; r < ROWS; r++) if (board[r][c]) col.push(board[r][c]);
+    for (let r = ROWS - 1; r >= 0; r--) board[r][c] = col.pop() || 0;
+  }
+}
+
+function applyPower() {
+  const { power, x, y } = current;
+  const below = y + 1 < ROWS ? board[y + 1][x] : 0;
+  switch (power) {
+    case 'bomb': // al tocar otro bloque borra su fila
+      if (below) { removeRow(y + 1); addLines(1); }
+      break;
+    case 'lightning': // limpia la columna de la posición
+      if (board.some(row => row[x])) {
+        for (let r = 0; r < ROWS; r++) board[r][x] = 0;
+        addLines(1);
+      }
+      break;
+    case 'tint': // el color del bloque más cercano pasa a comodín y completa la fila inferior
+      if (below) {
+        if (below !== WILD)
+          for (const row of board)
+            for (let c = 0; c < COLS; c++) if (row[c] === below) row[c] = WILD;
+        for (let c = 0; c < COLS; c++) if (!board[y + 1][c]) board[y + 1][c] = WILD;
+      }
+      break;
+    case 'gravity':
+      compactBoard();
+      break;
+    case 'freeze':
+      freezeLeft = FREEZE_MS;
+      break;
   }
 }
 
@@ -145,7 +233,8 @@ function softDrop() {
 }
 
 function lockPiece() {
-  merge();
+  if (current.power) applyPower();
+  else merge();
   clearLines();
   spawn();
 }
@@ -163,9 +252,11 @@ function updateHUD() {
   scoreEl.textContent = score.toLocaleString();
   linesEl.textContent = lines;
   levelEl.textContent = level;
+  freezeEl.classList.toggle('hidden', freezeLeft <= 0);
+  freezeEl.textContent = `❄ ${Math.ceil(freezeLeft / 1000)}s`;
 }
 
-function drawBlock(context, x, y, colorIndex, size, alpha) {
+function drawBlock(context, x, y, colorIndex, size, alpha, glyph) {
   if (!colorIndex) return;
   const color = COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
@@ -174,6 +265,16 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   // highlight
   context.fillStyle = THEMES[currentTheme].highlight;
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (glyph) {
+    context.strokeStyle = '#fff';
+    context.lineWidth = 2;
+    context.strokeRect(x * size + 2, y * size + 2, size - 4, size - 4);
+    context.fillStyle = '#000';
+    context.font = `${Math.floor(size * 0.55)}px sans-serif`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(glyph, x * size + size / 2, y * size + size / 2 + 1);
+  }
   context.globalAlpha = 1;
 }
 
@@ -208,12 +309,12 @@ function draw() {
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       if (current.shape[r][c])
-        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, THEMES[currentTheme].ghostAlpha);
+        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, THEMES[currentTheme].ghostAlpha, glyphOf(current));
 
   // current piece
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
-      drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+      drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK, 1, glyphOf(current));
 }
 
 function drawNext() {
@@ -224,7 +325,8 @@ function drawNext() {
   const offY = Math.floor((4 - shape.length) / 2);
   for (let r = 0; r < shape.length; r++)
     for (let c = 0; c < shape[r].length; c++)
-      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
+      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB, 1, glyphOf(next));
+  nextNameEl.textContent = next.power ? `Power-up: ${POWERS[next.power].name}` : '';
 }
 
 function endGame() {
@@ -252,7 +354,12 @@ function togglePause() {
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
-  dropAccum += dt;
+  if (freezeLeft > 0) {
+    freezeLeft = Math.max(0, freezeLeft - dt);
+    updateHUD();
+  } else {
+    dropAccum += dt;
+  }
   if (dropAccum >= dropInterval) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
@@ -274,6 +381,9 @@ function init() {
   gameOver = false;
   dropInterval = 1000;
   dropAccum = 0;
+  powerPending = false;
+  nextPowerAt = powerInterval();
+  freezeLeft = 0;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
@@ -329,6 +439,16 @@ themeToggle.addEventListener('click', () => {
   applyTheme(theme);
   themeToggle.blur(); // evita que Space active el botón durante el juego
 });
+
+powerToggle.addEventListener('change', () => {
+  powerupsEnabled = powerToggle.checked;
+  if (!powerupsEnabled) powerPending = false;
+  try { localStorage.setItem(POWERUPS_KEY, String(powerupsEnabled)); } catch (e) { /* ignorar */ }
+  powerToggle.blur(); // evita que Space cambie la casilla durante el juego
+});
+
+try { powerupsEnabled = localStorage.getItem(POWERUPS_KEY) !== 'false'; } catch (e) { /* ignorar */ }
+powerToggle.checked = powerupsEnabled;
 
 let savedTheme = null;
 try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) { /* ignorar */ }
