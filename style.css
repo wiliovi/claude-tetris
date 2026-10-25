@@ -132,24 +132,23 @@ body {
 
 /* ---- Panel lateral ---- */
 .panel {
-  width: 160px;
+  width: 250px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
   padding-top: 4px;
 }
 
-.panel-left {
-  align-items: flex-end;
-  text-align: right;
+.panel-top {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
 }
 
-.panel-left .panel-section {
-  align-items: flex-end;
-}
-
-.panel-left .powerup-option {
-  justify-content: flex-end;
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .panel-section {
@@ -209,7 +208,8 @@ kbd {
 /* ---- Overlay ---- */
 .overlay {
   position: absolute;
-  inset: 0;
+  inset: 0 auto 0 0;
+  width: 302px; /* solo el tablero: los paneles siguen legibles en pausa */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -272,10 +272,23 @@ kbd {
   cursor: pointer;
 }
 
+.next-name,
+.next-desc {
+  max-width: 210px;
+  text-align: left;
+  overflow-wrap: break-word;
+}
+
 .next-name {
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
+  min-height: 14px;
+}
+
+.next-desc {
+  font-size: 11px;
+  color: var(--muted);
   min-height: 14px;
 }
 

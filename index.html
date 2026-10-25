@@ -18,48 +18,47 @@
 
     <div class="game-area">
     <div class="game-container">
-      <aside class="panel panel-left" id="powerup-panel">
-        <div class="panel-section">
-          <span class="label">POWER-UPS</span>
-          <label class="powerup-option">
-            <input type="checkbox" id="powerup-toggle" checked />
-            <span>Activados</span>
-          </label>
-          <span class="next-name" id="next-name"></span>
-          <span class="freeze hidden" id="freeze"></span>
-        </div>
-      </aside>
-
       <canvas id="board" width="300" height="600"></canvas>
 
       <aside class="panel">
-        <div class="panel-section">
-          <span class="label">SCORE</span>
-          <span class="value" id="score">0</span>
-        </div>
-        <div class="panel-section">
-          <span class="label">LINES</span>
-          <span class="value" id="lines">0</span>
-        </div>
-        <div class="panel-section">
-          <span class="label">LEVEL</span>
-          <span class="value" id="level">1</span>
+        <div class="panel-top">
+          <div class="stats">
+            <div class="panel-section">
+              <span class="label">SCORE</span>
+              <span class="value" id="score">0</span>
+            </div>
+            <div class="panel-section">
+              <span class="label">LINES</span>
+              <span class="value" id="lines">0</span>
+            </div>
+            <div class="panel-section">
+              <span class="label">LEVEL</span>
+              <span class="value" id="level">1</span>
+            </div>
+          </div>
+
+          <div class="panel-section controls">
+            <span class="label">CONTROLS</span>
+            <ul>
+              <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+              <li><kbd>↑</kbd> rotar</li>
+              <li><kbd>↓</kbd> bajar</li>
+              <li><kbd>Space</kbd> caída</li>
+              <li><kbd>P</kbd> pausa</li>
+            </ul>
+          </div>
         </div>
 
         <div class="panel-section">
           <span class="label">NEXT</span>
           <canvas id="next-canvas" width="120" height="120"></canvas>
-        </div>
-
-        <div class="panel-section controls">
-          <span class="label">CONTROLS</span>
-          <ul>
-            <li><kbd>←</kbd><kbd>→</kbd> mover</li>
-            <li><kbd>↑</kbd> rotar</li>
-            <li><kbd>↓</kbd> bajar</li>
-            <li><kbd>Space</kbd> caída</li>
-            <li><kbd>P</kbd> pausa</li>
-          </ul>
+          <span class="next-name" id="next-name"></span>
+          <span class="next-desc" id="next-desc"></span>
+          <label class="powerup-option">
+            <input type="checkbox" id="powerup-toggle" checked />
+            <span>Power-ups</span>
+          </label>
+          <span class="freeze hidden" id="freeze"></span>
         </div>
       </aside>
     </div>

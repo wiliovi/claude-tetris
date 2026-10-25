@@ -21,11 +21,11 @@ const WILD = 9;
 
 // Power-ups: pieza de 1 bloque; `color` indica la pieza cuyo color toman
 const POWERS = {
-  bomb:      { name: 'Bomba',    color: 2, glyph: '💣' },
-  lightning: { name: 'Rayo',     color: 4, glyph: '⚡' },
-  tint:      { name: 'Tinte',    color: 4, glyph: '🎨' },
-  gravity:   { name: 'Gravedad', color: 1, glyph: '⬇' },
-  freeze:    { name: 'Congelar', color: 3, glyph: '❄' },
+  bomb:      { name: 'Bomba',    color: 2, glyph: '💣', desc: 'Elimina la fila de debajo.' },
+  lightning: { name: 'Rayo',     color: 4, glyph: '⚡', desc: 'Borra toda su columna.' },
+  tint:      { name: 'Tinte',    color: 4, glyph: '🎨', desc: 'Comodín abajo y rellena la fila.' },
+  gravity:   { name: 'Gravedad', color: 1, glyph: '⬇', desc: 'Los bloques caen y tapan huecos.' },
+  freeze:    { name: 'Congelar', color: 3, glyph: '❄', desc: 'Detiene la caída 5 s.' },
 };
 const POWER_KEYS = Object.keys(POWERS);
 const FREEZE_MS = 5000;
@@ -64,6 +64,7 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const nextNameEl = document.getElementById('next-name');
+const nextDescEl = document.getElementById('next-desc');
 const freezeEl = document.getElementById('freeze');
 const powerToggle = document.getElementById('powerup-toggle');
 
@@ -327,11 +328,13 @@ function drawNext() {
     for (let c = 0; c < shape[r].length; c++)
       drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB, 1, glyphOf(next));
   nextNameEl.textContent = next.power ? `Power-up: ${POWERS[next.power].name}` : '';
+  nextDescEl.textContent = next.power ? POWERS[next.power].desc : '';
 }
 
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
+  restartBtn.textContent = 'Reiniciar';
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
@@ -341,10 +344,12 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    overlay.classList.add('hidden');
     lastTime = performance.now();
     loop(lastTime);
   } else {
     cancelAnimationFrame(animId);
+    restartBtn.textContent = 'Continuar';
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
     overlay.classList.remove('hidden');
@@ -368,6 +373,7 @@ function loop(ts) {
       lockPiece();
     }
   }
+  if (gameOver) return;
   draw();
   animId = requestAnimationFrame(loop);
 }
@@ -418,7 +424,10 @@ document.addEventListener('keydown', e => {
   updateHUD();
 });
 
-restartBtn.addEventListener('click', init);
+restartBtn.addEventListener('click', () => {
+  if (paused && !gameOver) togglePause(); // en pausa: reanudar sin reiniciar
+  else init();
+});
 
 const themeToggle = document.getElementById('theme-toggle');
 
