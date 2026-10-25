@@ -302,6 +302,61 @@ kbd {
   display: none;
 }
 
+/* ---- Combos y efectos ---- */
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.features .powerup-option {
+  justify-content: flex-start;
+}
+
+.combo-count {
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 700;
+  color: var(--danger);
+  min-height: 16px;
+}
+
+.mute-btn {
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  color: var(--kbd-text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.combo-msg {
+  position: absolute;
+  top: 35%;
+  left: 0;
+  width: 302px;
+  text-align: center;
+  pointer-events: none;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--board-shadow), 0 0 12px var(--accent);
+  opacity: 0;
+}
+
+.combo-msg.show {
+  animation: combo-pop 1.5s ease-out forwards;
+}
+
+@keyframes combo-pop {
+  0% { opacity: 0; transform: scale(0.5); }
+  15% { opacity: 1; transform: scale(1.2); }
+  30% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-30px); }
+}
+
 .botones
 {
   display: flex;

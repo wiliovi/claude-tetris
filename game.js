@@ -45,6 +45,16 @@ const PIECES = [
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
+// Combos y multiplicadores (se aplican directamente a la puntuación)
+const TSPIN_SCORES = [400, 800, 1200, 1600]; // 0-3 líneas
+const TSPIN_MULT = 1;
+const B2B_MULT = 1.5;
+const PERFECT_MULT = 2;
+const TSPIN_NAMES = ['T-SPIN', 'T-SPIN SIMPLE', 'T-SPIN DOBLE', 'T-SPIN TRIPLE'];
+const FEATURES_KEY = 'tetris-features';
+const MUTE_KEY = 'tetris-muted';
+const features = { combo: true, tspin: true, b2b: true, perfect: true };
+
 const THEMES = {
   dark: { grid: '#22222e', highlight: 'rgba(255,255,255,0.12)', ghostAlpha: 0.2 },
   light: { grid: '#e1e3ec', highlight: 'rgba(255,255,255,0.35)', ghostAlpha: 0.3 },
@@ -67,9 +77,13 @@ const nextNameEl = document.getElementById('next-name');
 const nextDescEl = document.getElementById('next-desc');
 const freezeEl = document.getElementById('freeze');
 const powerToggle = document.getElementById('powerup-toggle');
+const comboEl = document.getElementById('combo');
+const comboMsgEl = document.getElementById('combo-msg');
+const muteBtn = document.getElementById('mute-btn');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let powerupsEnabled = true, powerPending, nextPowerAt, freezeLeft;
+let comboCount, b2bActive, lastMoveWasRotation, muted = false, audioCtx, msgTimer;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -129,6 +143,8 @@ function tryRotate() {
     if (!collide(rotated, current.x + kick, current.y)) {
       current.shape = rotated;
       current.x += kick;
+      lastMoveWasRotation = true;
+      sfx('rotate');
       return;
     }
   }
@@ -151,13 +167,65 @@ function clearLines() {
       r++;
     }
   }
+  return cleared;
+}
+
+// T-spin (regla de 3 esquinas): T bloqueada tras rotar con 3 de las 4 esquinas ocupadas
+function isTSpin() {
+  if (current.power || current.type !== 3 || !lastMoveWasRotation) return false;
+  let filled = 0;
+  for (const [dx, dy] of [[0, 0], [2, 0], [0, 2], [2, 2]]) {
+    const nx = current.x + dx, ny = current.y + dy;
+    if (nx < 0 || nx >= COLS || ny >= ROWS || (ny >= 0 && board[ny][nx])) filled++;
+  }
+  return filled >= 3;
+}
+
+function isBoardEmpty() {
+  return board.every(row => row.every(v => v === 0));
+}
+
+// Puntúa un bloqueo de pieza: combo, T-spin, B2B y Perfect Clear
+function scoreLock(cleared, tspin) {
+  const notes = [];
+  tspin = tspin && features.tspin;
+  if (!cleared && !tspin) { comboCount = 0; updateHUD(); return; }
+  let base;
+  let mult = TSPIN_MULT;
+  if (tspin) {
+    base = TSPIN_SCORES[Math.min(cleared, 3)];
+    notes.push(TSPIN_NAMES[Math.min(cleared, 3)]);
+  } else {
+    base = LINE_SCORES[Math.min(cleared, 4)];
+    if (cleared === 4) notes.push('TETRIS');
+  }
+  if (!cleared) { // T-spin sin líneas: rompe el combo, no toca el B2B
+    comboCount = 0;
+    score += base * level * mult;
+    announce(notes);
+    updateHUD();
+    return;
+  }
+  comboCount++;
+  if (features.combo && comboCount > 1) {
+    mult *= comboCount;
+    notes.push(`COMBO x${comboCount}`);
+  }
+  const difficult = tspin || cleared === 4;
+  if (features.b2b) {
+    if (difficult && b2bActive) { mult *= B2B_MULT; notes.push(`BACK-TO-BACK x${B2B_MULT}`); }
+    b2bActive = difficult;
+  }
+  if (features.perfect && isBoardEmpty()) { mult *= PERFECT_MULT; notes.push(`PERFECT CLEAR x${PERFECT_MULT}`); }
+  score += Math.round(base * level * mult);
   addLines(cleared);
+  announce(notes);
+  sfx(notes.length > 1 || difficult ? 'big' : 'clear', comboCount);
 }
 
 function addLines(cleared) {
   if (!cleared) return;
   lines += cleared;
-  score += (LINE_SCORES[Math.min(cleared, 4)] || 0) * level;
   level = Math.floor(lines / 10) + 1;
   dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   if (lines >= nextPowerAt) {
@@ -185,12 +253,12 @@ function applyPower() {
   const below = y + 1 < ROWS ? board[y + 1][x] : 0;
   switch (power) {
     case 'bomb': // al tocar otro bloque borra su fila
-      if (below) { removeRow(y + 1); addLines(1); }
+      if (below) { removeRow(y + 1); return 1; }
       break;
     case 'lightning': // limpia la columna de la posición
       if (board.some(row => row[x])) {
         for (let r = 0; r < ROWS; r++) board[r][x] = 0;
-        addLines(1);
+        return 1;
       }
       break;
     case 'tint': // el color del bloque más cercano pasa a comodín y completa la fila inferior
@@ -208,6 +276,7 @@ function applyPower() {
       freezeLeft = FREEZE_MS;
       break;
   }
+  return 0;
 }
 
 function ghostY() {
@@ -219,6 +288,7 @@ function ghostY() {
 function hardDrop() {
   const gy = ghostY();
   score += (gy - current.y) * 2;
+  if (gy > current.y) lastMoveWasRotation = false;
   current.y = gy;
   lockPiece();
 }
@@ -226,6 +296,7 @@ function hardDrop() {
 function softDrop() {
   if (!collide(current.shape, current.x, current.y + 1)) {
     current.y++;
+    lastMoveWasRotation = false;
     score += 1;
     updateHUD();
   } else {
@@ -234,9 +305,13 @@ function softDrop() {
 }
 
 function lockPiece() {
-  if (current.power) applyPower();
+  const tspin = isTSpin();
+  let cleared = 0;
+  if (current.power) cleared += applyPower();
   else merge();
-  clearLines();
+  cleared += clearLines();
+  scoreLock(cleared, tspin);
+  lastMoveWasRotation = false;
   spawn();
 }
 
@@ -255,6 +330,48 @@ function updateHUD() {
   levelEl.textContent = level;
   freezeEl.classList.toggle('hidden', freezeLeft <= 0);
   freezeEl.textContent = `❄ ${Math.ceil(freezeLeft / 1000)}s`;
+  comboEl.textContent = features.combo && comboCount > 1 ? `COMBO x${comboCount}` : '';
+}
+
+// ---- Efectos visuales y sonoros ----
+function announce(notes) {
+  if (!notes.length) return;
+  comboMsgEl.textContent = '';
+  notes.forEach(n => {
+    const line = document.createElement('div');
+    line.textContent = n;
+    comboMsgEl.appendChild(line);
+  });
+  comboMsgEl.classList.remove('show');
+  void comboMsgEl.offsetWidth; // reinicia la animación
+  comboMsgEl.classList.add('show');
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => comboMsgEl.classList.remove('show'), 1500);
+}
+
+function tone(freq, start, dur, type = 'square', vol = 0.06) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const t = audioCtx.currentTime + start;
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + dur);
+}
+
+// Sonidos generados por código (Web Audio), sin archivos externos
+function sfx(kind, n = 1) {
+  if (muted) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (kind === 'rotate') tone(440, 0, 0.04, 'square', 0.03);
+    else if (kind === 'clear') tone(440 * Math.pow(1.12, Math.min(n, 12)), 0, 0.15, 'triangle', 0.1);
+    else if (kind === 'big') [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.07, 0.18, 'triangle', 0.1));
+  } catch (e) { /* audio no disponible */ }
 }
 
 function drawBlock(context, x, y, colorIndex, size, alpha, glyph) {
@@ -369,6 +486,7 @@ function loop(ts) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
       current.y++;
+      lastMoveWasRotation = false;
     } else {
       lockPiece();
     }
@@ -390,6 +508,10 @@ function init() {
   powerPending = false;
   nextPowerAt = powerInterval();
   freezeLeft = 0;
+  comboCount = 0;
+  b2bActive = false;
+  lastMoveWasRotation = false;
+  comboMsgEl.classList.remove('show');
   lastTime = performance.now();
   next = randomPiece();
   spawn();
@@ -404,10 +526,10 @@ document.addEventListener('keydown', e => {
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
-      if (!collide(current.shape, current.x - 1, current.y)) current.x--;
+      if (!collide(current.shape, current.x - 1, current.y)) { current.x--; lastMoveWasRotation = false; }
       break;
     case 'ArrowRight':
-      if (!collide(current.shape, current.x + 1, current.y)) current.x++;
+      if (!collide(current.shape, current.x + 1, current.y)) { current.x++; lastMoveWasRotation = false; }
       break;
     case 'ArrowDown':
       softDrop();
@@ -456,8 +578,34 @@ powerToggle.addEventListener('change', () => {
   powerToggle.blur(); // evita que Space cambie la casilla durante el juego
 });
 
+try { Object.assign(features, JSON.parse(localStorage.getItem(FEATURES_KEY)) || {}); } catch (e) { /* ignorar */ }
 try { powerupsEnabled = localStorage.getItem(POWERUPS_KEY) !== 'false'; } catch (e) { /* ignorar */ }
 powerToggle.checked = powerupsEnabled;
+
+document.querySelectorAll('[data-feature]').forEach(box => {
+  box.checked = features[box.dataset.feature];
+  box.addEventListener('change', () => {
+    features[box.dataset.feature] = box.checked;
+    try { localStorage.setItem(FEATURES_KEY, JSON.stringify(features)); } catch (e) { /* ignorar */ }
+    updateHUD();
+    box.blur(); // evita que Space cambie la casilla durante el juego
+  });
+});
+
+function applyMute() {
+  muteBtn.textContent = muted ? '🔇 Sonido' : '🔊 Sonido';
+  muteBtn.setAttribute('aria-pressed', String(muted));
+}
+
+muteBtn.addEventListener('click', () => {
+  muted = !muted;
+  try { localStorage.setItem(MUTE_KEY, String(muted)); } catch (e) { /* ignorar */ }
+  applyMute();
+  muteBtn.blur();
+});
+
+try { muted = localStorage.getItem(MUTE_KEY) === 'true'; } catch (e) { /* ignorar */ }
+applyMute();
 
 let savedTheme = null;
 try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) { /* ignorar */ }

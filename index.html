@@ -59,11 +59,22 @@
             <span>Power-ups</span>
           </label>
           <span class="freeze hidden" id="freeze"></span>
+          <span class="combo-count" id="combo"></span>
+          <div class="features">
+            <span class="label">COMBOS</span>
+            <label class="powerup-option"><input type="checkbox" data-feature="combo" checked /><span>Combo</span></label>
+            <label class="powerup-option"><input type="checkbox" data-feature="tspin" checked /><span>T-spin</span></label>
+            <label class="powerup-option"><input type="checkbox" data-feature="b2b" checked /><span>Back-to-Back</span></label>
+            <label class="powerup-option"><input type="checkbox" data-feature="perfect" checked /><span>Perfect Clear</span></label>
+          </div>
+          <button id="mute-btn" class="mute-btn" type="button" aria-pressed="false">🔊 Sonido</button>
         </div>
       </aside>
     </div>
 
-    <div id="overlay" class="overlay hidden">
+    <div id="combo-msg" class="combo-msg" aria-live="polite"></div>
+
+    <div id="overlay"class="overlay hidden">
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
