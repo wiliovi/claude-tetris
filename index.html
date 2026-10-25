@@ -18,7 +18,35 @@
 
     <div class="game-area">
     <div class="game-container">
-      <canvas id="board" width="300" height="600"></canvas>
+      <aside class="panel panel-left">
+        <label class="powerup-option">
+          <input type="checkbox" id="powerup-toggle" checked />
+          <span>Power-ups</span>
+        </label>
+        <span class="freeze hidden" id="freeze"></span>
+        <span class="combo-count" id="combo"></span>
+        <div class="features">
+          <span class="label">COMBOS</span>
+          <label class="powerup-option"><input type="checkbox" data-feature="combo" checked /><span>Combo</span></label>
+          <label class="powerup-option"><input type="checkbox" data-feature="tspin" checked /><span>T-spin</span></label>
+          <label class="powerup-option"><input type="checkbox" data-feature="b2b" checked /><span>Back-to-Back</span></label>
+          <label class="powerup-option"><input type="checkbox" data-feature="perfect" checked /><span>Perfect Clear</span></label>
+        </div>
+        <button id="mute-btn" class="mute-btn" type="button" aria-pressed="false">🔊 Sonido</button>
+      </aside>
+
+      <div class="board-wrap">
+        <canvas id="board" width="300" height="600"></canvas>
+        <div id="combo-msg" class="combo-msg" aria-live="polite"></div>
+
+        <div id="overlay" class="overlay hidden">
+          <div class="overlay-box">
+            <p id="overlay-title">GAME OVER</p>
+            <p id="overlay-score"></p>
+            <button id="restart-btn">Reiniciar</button>
+          </div>
+        </div>
+      </div>
 
       <aside class="panel">
         <div class="panel-top">
@@ -54,32 +82,24 @@
           <canvas id="next-canvas" width="120" height="120"></canvas>
           <span class="next-name" id="next-name"></span>
           <span class="next-desc" id="next-desc"></span>
-          <label class="powerup-option">
-            <input type="checkbox" id="powerup-toggle" checked />
-            <span>Power-ups</span>
-          </label>
-          <span class="freeze hidden" id="freeze"></span>
-          <span class="combo-count" id="combo"></span>
-          <div class="features">
-            <span class="label">COMBOS</span>
-            <label class="powerup-option"><input type="checkbox" data-feature="combo" checked /><span>Combo</span></label>
-            <label class="powerup-option"><input type="checkbox" data-feature="tspin" checked /><span>T-spin</span></label>
-            <label class="powerup-option"><input type="checkbox" data-feature="b2b" checked /><span>Back-to-Back</span></label>
-            <label class="powerup-option"><input type="checkbox" data-feature="perfect" checked /><span>Perfect Clear</span></label>
-          </div>
-          <button id="mute-btn" class="mute-btn" type="button" aria-pressed="false">🔊 Sonido</button>
         </div>
       </aside>
-    </div>
 
-    <div id="combo-msg" class="combo-msg" aria-live="polite"></div>
-
-    <div id="overlay"class="overlay hidden">
-      <div class="overlay-box">
-        <p id="overlay-title">GAME OVER</p>
-        <p id="overlay-score"></p>
-        <button id="restart-btn">Reiniciar</button>
-      </div>
+      <aside class="panel panel-right">
+        <div class="panel-section">
+          <span class="label">PARTIDA ANTERIOR</span>
+          <span class="value" id="last-score">—</span>
+          <span class="last-name" id="last-name"></span>
+        </div>
+        <div class="panel-section">
+          <span class="label">JUGADOR</span>
+          <input type="text" id="player-name" maxlength="12" placeholder="Tu nombre" autocomplete="off">
+        </div>
+        <div class="panel-section">
+          <span class="label">RÉCORD</span>
+          <span class="best-score" id="best-score">—</span>
+        </div>
+      </aside>
     </div>
     </div>
   </div>

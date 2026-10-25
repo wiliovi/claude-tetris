@@ -122,6 +122,10 @@ body {
   align-items: flex-start;
 }
 
+.board-wrap {
+  position: relative;
+}
+
 #board {
   display: block;
   border: 1px solid var(--border);
@@ -137,6 +141,35 @@ body {
   flex-direction: column;
   gap: 14px;
   padding-top: 4px;
+}
+
+.panel-left {
+  width: 160px;
+  align-items: flex-start;
+}
+
+/* ---- Partida anterior ---- */
+.panel-right {
+  width: 160px;
+  align-items: flex-start;
+}
+
+.panel-right input {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--canvas-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.last-name,
+.best-score {
+  font-size: 13px;
+  color: var(--muted);
+  word-break: break-word;
 }
 
 .panel-top {
@@ -208,8 +241,7 @@ kbd {
 /* ---- Overlay ---- */
 .overlay {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 302px; /* solo el tablero: los paneles siguen legibles en pausa */
+  inset: 0; /* solo el tablero: los paneles siguen legibles en pausa */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -334,7 +366,7 @@ kbd {
   position: absolute;
   top: 35%;
   left: 0;
-  width: 302px;
+  width: 100%;
   text-align: center;
   pointer-events: none;
   font-weight: 800;

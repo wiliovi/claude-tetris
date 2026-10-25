@@ -53,6 +53,9 @@ const PERFECT_MULT = 2;
 const TSPIN_NAMES = ['T-SPIN', 'T-SPIN SIMPLE', 'T-SPIN DOBLE', 'T-SPIN TRIPLE'];
 const FEATURES_KEY = 'tetris-features';
 const MUTE_KEY = 'tetris-muted';
+const SCORES_KEY = 'tetris-scores';
+const NAME_KEY = 'tetris-name';
+const MAX_HISTORY = 50;
 const features = { combo: true, tspin: true, b2b: true, perfect: true };
 
 const THEMES = {
@@ -80,6 +83,10 @@ const powerToggle = document.getElementById('powerup-toggle');
 const comboEl = document.getElementById('combo');
 const comboMsgEl = document.getElementById('combo-msg');
 const muteBtn = document.getElementById('mute-btn');
+const lastScoreEl = document.getElementById('last-score');
+const lastNameEl = document.getElementById('last-name');
+const bestScoreEl = document.getElementById('best-score');
+const playerNameEl = document.getElementById('player-name');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let powerupsEnabled = true, powerPending, nextPowerAt, freezeLeft;
@@ -455,6 +462,44 @@ function endGame() {
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
+  recordGame();
+}
+
+// ---- Historial de partidas ----
+function loadScores() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SCORES_KEY));
+    return Array.isArray(data) ? data : [];
+  } catch (e) { return []; }
+}
+
+function recordGame() {
+  if (score <= 0) return;
+  const name = playerNameEl.value.trim();
+  const history = loadScores();
+  history.push({ name, score });
+  try {
+    localStorage.setItem(SCORES_KEY, JSON.stringify(history.slice(-MAX_HISTORY)));
+    localStorage.setItem(NAME_KEY, name);
+  } catch (e) { /* ignorar */ }
+  renderLastGame();
+}
+
+function renderLastGame() {
+  const history = loadScores();
+  if (!history.length) {
+    lastScoreEl.textContent = '—';
+    lastNameEl.textContent = '';
+    bestScoreEl.textContent = '—';
+    return;
+  }
+  const last = history[history.length - 1];
+  const best = history.reduce((a, b) => (b.score > a.score ? b : a));
+  lastScoreEl.textContent = last.score.toLocaleString();
+  lastNameEl.textContent = last.name;
+  bestScoreEl.textContent = best.name
+    ? `${best.score.toLocaleString()} · ${best.name}`
+    : best.score.toLocaleString();
 }
 
 function togglePause() {
@@ -522,6 +567,7 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (e.target === playerNameEl) return;
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
@@ -606,6 +652,9 @@ muteBtn.addEventListener('click', () => {
 
 try { muted = localStorage.getItem(MUTE_KEY) === 'true'; } catch (e) { /* ignorar */ }
 applyMute();
+
+try { playerNameEl.value = localStorage.getItem(NAME_KEY) || ''; } catch (e) { /* ignorar */ }
+renderLastGame();
 
 let savedTheme = null;
 try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) { /* ignorar */ }
