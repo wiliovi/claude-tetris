@@ -395,3 +395,66 @@ kbd {
   justify-content: center;
   gap: 10px;
 }
+
+/* ---- Desafíos ---- */
+.panel-challenge {
+  width: 200px;
+  align-items: flex-start;
+}
+
+.challenge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.challenge-btn {
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  color: var(--kbd-text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.challenge-btn.active {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.challenge-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.challenge-status {
+  width: 100%;
+  font-size: 12px;
+}
+
+.challenge-status.hidden,
+.challenge-warn.hidden {
+  display: none;
+}
+
+.challenge-title {
+  font-weight: 700;
+}
+
+.challenge-goal {
+  color: var(--label);
+}
+
+.challenge-timer {
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.challenge-warn {
+  color: var(--danger);
+  font-weight: 700;
+}
