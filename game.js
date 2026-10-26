@@ -192,7 +192,7 @@ function glyphOf(piece) {
 }
 
 function randomPiece() {
-  if (powerupsEnabled && challenge?.id === 'reverse' && powerPending) {
+  if (powerupsEnabled && !challenge && powerPending) {
     powerPending = false;
     return powerPiece();
   }
