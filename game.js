@@ -58,6 +58,18 @@ const NAME_KEY = 'tetris-name';
 const MAX_HISTORY = 50;
 const features = { combo: true, tspin: true, b2b: true, perfect: true };
 
+// Desafíos: se desbloquean en orden; el aleatorio se habilita al desbloquear el cuarto
+const CHALLENGES_KEY = 'tetris-challenges';
+const GARBAGE_MS = 10000;
+const CHALLENGES = [
+  { id: 'sprint', name: 'Sprint', goal: 'Limpia 40 líneas en 2 minutos', lines: 40, timeLimit: 120000 },
+  { id: 'garbage', name: 'Basura', goal: 'Sobrevive 90 s con basura cada 10 s', surviveMs: 90000, garbage: true },
+  { id: 'fixed', name: 'Bloques fijos', goal: 'Limpia 15 líneas con el tablero pre-cargado', lines: 15, preset: true },
+  { id: 'invisible', name: 'Invisibles', goal: 'Limpia 10 líneas: lo apilado se vuelve invisible', lines: 10, invisible: true },
+  { id: 'reverse', name: 'Rotación inversa', goal: 'Limpia 15 líneas desde el nivel 10', lines: 15, baseLevel: 10, reverseFromLevel: 10 },
+];
+const RANDOM_UNLOCK = 3; // desafíos superados para habilitar el aleatorio (aparece el 4.º)
+
 const THEMES = {
   dark: { grid: '#22222e', highlight: 'rgba(255,255,255,0.12)', ghostAlpha: 0.2 },
   light: { grid: '#e1e3ec', highlight: 'rgba(255,255,255,0.35)', ghostAlpha: 0.3 },
@@ -88,6 +100,14 @@ const lastNameEl = document.getElementById('last-name');
 const bestScoreEl = document.getElementById('best-score');
 const playerNameEl = document.getElementById('player-name');
 
+const challengeListEl = document.getElementById('challenge-list');
+const challengeStatusEl = document.getElementById('challenge-status');
+const challengeTitleEl = document.getElementById('challenge-title');
+const challengeGoalEl = document.getElementById('challenge-goal');
+const challengeTimerEl = document.getElementById('challenge-timer');
+const challengeWarnEl = document.getElementById('challenge-warn');
+
+let challenge = null, challengeTime = 0, garbageAccum = 0, completed = [];
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let powerupsEnabled = true, powerPending, nextPowerAt, freezeLeft;
 let comboCount, b2bActive, lastMoveWasRotation, muted = false, audioCtx, msgTimer;
@@ -101,6 +121,29 @@ function powerInterval() {
   return Math.min(12, 3 + level);
 }
 
+// Tablero con bloques fijos: 6 filas inferiores con huecos en diagonal
+function presetBoard() {
+  const b = createBoard();
+  for (let i = 0; i < 6; i++) {
+    const r = ROWS - 1 - i;
+    for (let c = 0; c < COLS; c++)
+      if ((c + i * 2) % 5 !== 0) b[r][c] = ((c + i) % 7) + 1;
+  }
+  return b;
+}
+
+// Sube todo una fila e inserta basura con un hueco aleatorio; la pieza actual sube si la toca
+function addGarbageRow() {
+  if (board[0].some(v => v)) { endGame(false, 'GAME OVER'); return; }
+  const hole = Math.floor(Math.random() * COLS);
+  board.shift();
+  board.push(Array.from({ length: COLS }, (_, c) => (c === hole ? 0 : WILD)));
+  while (collide(current.shape, current.x, current.y)) {
+    current.y--;
+    if (current.y < -4) { endGame(false, 'GAME OVER'); return; }
+  }
+}
+
 function powerPiece() {
   const power = POWER_KEYS[Math.floor(Math.random() * POWER_KEYS.length)];
   const color = POWERS[power].color;
@@ -112,7 +155,7 @@ function glyphOf(piece) {
 }
 
 function randomPiece() {
-  if (powerupsEnabled && powerPending) {
+  if (powerupsEnabled && !challenge && powerPending) {
     powerPending = false;
     return powerPiece();
   }
@@ -144,7 +187,8 @@ function rotateCW(shape) {
 }
 
 function tryRotate() {
-  const rotated = rotateCW(current.shape);
+  let rotated = rotateCW(current.shape);
+  if (current.inverted) rotated = rotateCW(rotateCW(rotated)); // 3 giros = antihorario
   const kicks = [0, -1, 1, -2, 2];
   for (const kick of kicks) {
     if (!collide(rotated, current.x + kick, current.y)) {
@@ -233,7 +277,7 @@ function scoreLock(cleared, tspin) {
 function addLines(cleared) {
   if (!cleared) return;
   lines += cleared;
-  level = Math.floor(lines / 10) + 1;
+  level = Math.floor(lines / 10) + (challenge?.baseLevel || 1);
   dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   if (lines >= nextPowerAt) {
     powerPending = true;
@@ -319,16 +363,20 @@ function lockPiece() {
   cleared += clearLines();
   scoreLock(cleared, tspin);
   lastMoveWasRotation = false;
+  if (challenge?.lines && lines >= challenge.lines) { endGame(true); return; }
   spawn();
 }
 
 function spawn() {
   current = next;
   next = randomPiece();
+  // Rotación inversa: solo desde el nivel indicado y de forma aleatoria
+  current.inverted = !!challenge?.reverseFromLevel && level >= challenge.reverseFromLevel && Math.random() < 0.5;
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
   drawNext();
+  updateHUD();
 }
 
 function updateHUD() {
@@ -338,6 +386,77 @@ function updateHUD() {
   freezeEl.classList.toggle('hidden', freezeLeft <= 0);
   freezeEl.textContent = `❄ ${Math.ceil(freezeLeft / 1000)}s`;
   comboEl.textContent = features.combo && comboCount > 1 ? `COMBO x${comboCount}` : '';
+  updateChallengeHUD();
+}
+
+function fmtTime(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function updateChallengeHUD() {
+  challengeStatusEl.classList.toggle('hidden', !challenge);
+  if (!challenge) return;
+  challengeTitleEl.textContent = challenge.name;
+  let goal = challenge.goal;
+  if (challenge.lines) goal += ` (${Math.min(lines, challenge.lines)}/${challenge.lines})`;
+  challengeGoalEl.textContent = goal;
+  if (challenge.timeLimit) challengeTimerEl.textContent = `⏱ ${fmtTime(challenge.timeLimit - challengeTime)}`;
+  else if (challenge.surviveMs) challengeTimerEl.textContent = `⏱ ${fmtTime(challenge.surviveMs - challengeTime)}`;
+  else challengeTimerEl.textContent = `⏱ ${fmtTime(challengeTime)}`;
+  let warn = '';
+  if (current?.inverted) warn = '↺ ROTACIÓN INVERSA';
+  else if (challenge.garbage) warn = `Basura en ${Math.ceil((GARBAGE_MS - garbageAccum) / 1000)}s`;
+  challengeWarnEl.textContent = warn;
+  challengeWarnEl.classList.toggle('hidden', !warn);
+}
+
+// ---- Progreso de desafíos ----
+function loadCompleted() {
+  try {
+    const data = JSON.parse(localStorage.getItem(CHALLENGES_KEY));
+    return Array.isArray(data) ? data.filter(id => CHALLENGES.some(c => c.id === id)) : [];
+  } catch (e) { return []; }
+}
+
+function isUnlocked(i) {
+  return i === 0 || completed.includes(CHALLENGES[i - 1].id);
+}
+
+function renderChallenges() {
+  challengeListEl.textContent = '';
+  const add = (text, disabled, active, onClick) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'challenge-btn' + (active ? ' active' : '');
+    btn.textContent = text;
+    btn.disabled = disabled;
+    btn.addEventListener('click', () => { onClick(); btn.blur(); });
+    challengeListEl.appendChild(btn);
+  };
+  add('Modo libre', false, !challenge, () => startChallenge(null));
+  CHALLENGES.forEach((c, i) => {
+    const done = completed.includes(c.id);
+    const open = isUnlocked(i);
+    add(`${done ? '✓' : open ? '▶' : '🔒'} ${i + 1}. ${c.name}`, !open, challenge === c, () => startChallenge(c));
+  });
+  const randomOpen = completed.length >= RANDOM_UNLOCK;
+  add(randomOpen ? '🎲 Aleatorio' : '🔒 Aleatorio (supera 3)', !randomOpen, false, () => {
+    const pool = CHALLENGES.filter((_, i) => isUnlocked(i));
+    startChallenge(pool[Math.floor(Math.random() * pool.length)]);
+  });
+}
+
+function startChallenge(c) {
+  challenge = c;
+  renderChallenges();
+  init();
+}
+
+function saveCompleted(c) {
+  if (completed.includes(c.id)) return;
+  completed.push(c.id);
+  try { localStorage.setItem(CHALLENGES_KEY, JSON.stringify(completed)); } catch (e) { /* ignorar */ }
 }
 
 // ---- Efectos visuales y sonoros ----
@@ -425,9 +544,10 @@ function draw() {
   drawGrid();
 
   // board
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      drawBlock(ctx, c, r, board[r][c], BLOCK);
+  if (!challenge?.invisible) // desafío "invisibles": lo ya apilado no se dibuja
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        drawBlock(ctx, c, r, board[r][c], BLOCK);
 
   // ghost
   const gy = ghostY();
@@ -455,11 +575,19 @@ function drawNext() {
   nextDescEl.textContent = next.power ? POWERS[next.power].desc : '';
 }
 
-function endGame() {
+function endGame(win = false, title = 'GAME OVER') {
+  if (gameOver) return;
   gameOver = true;
   cancelAnimationFrame(animId);
   restartBtn.textContent = 'Reiniciar';
-  overlayTitle.textContent = 'GAME OVER';
+  if (win && challenge) {
+    title = '¡DESAFÍO SUPERADO!';
+    saveCompleted(challenge);
+    renderChallenges();
+  }
+  overlayTitle.textContent = title;
+  draw();
+  updateHUD();
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
   recordGame();
@@ -527,6 +655,17 @@ function loop(ts) {
   } else {
     dropAccum += dt;
   }
+  if (challenge) {
+    challengeTime += dt;
+    if (challenge.garbage) {
+      garbageAccum += dt;
+      if (garbageAccum >= GARBAGE_MS) { garbageAccum = 0; addGarbageRow(); }
+    }
+    if (!gameOver && challenge.surviveMs && challengeTime >= challenge.surviveMs) endGame(true);
+    else if (!gameOver && challenge.timeLimit && challengeTime >= challenge.timeLimit) endGame(false, 'TIEMPO AGOTADO');
+    updateChallengeHUD();
+    if (gameOver) return;
+  }
   if (dropAccum >= dropInterval) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
@@ -542,13 +681,16 @@ function loop(ts) {
 }
 
 function init() {
-  board = createBoard();
+  board = challenge?.preset ? presetBoard() : createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  level = challenge?.baseLevel || 1;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  challengeTime = 0;
+  garbageAccum = 0;
+  current = null;
+  dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   dropAccum = 0;
   powerPending = false;
   nextPowerAt = powerInterval();
@@ -655,6 +797,9 @@ applyMute();
 
 try { playerNameEl.value = localStorage.getItem(NAME_KEY) || ''; } catch (e) { /* ignorar */ }
 renderLastGame();
+
+completed = loadCompleted();
+renderChallenges();
 
 let savedTheme = null;
 try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) { /* ignorar */ }
