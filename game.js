@@ -32,6 +32,22 @@ const FREEZE_MS = 5000;
 const POWERUPS_KEY = 'tetris-powerups';
 const BIGPIECES_KEY = 'tetris-bigpieces';
 
+// Habilidades cargables: la energía se mide en cuartos de línea; cada habilidad cuesta 3 líneas
+const SKILLS_KEY = 'tetris-skills';
+const ENERGY_PER_LINE = 4;
+const ENERGY_COST = 3 * ENERGY_PER_LINE;
+const ENERGY_MAX = 5 * ENERGY_COST;
+const SLOW_MS = 10000;
+const PEEK_TURNS = 5;
+const UNDO_DEPTH = 5;
+const SKILLS = [
+  { name: 'Ver 5 piezas', desc: 'Muestra las siguientes 5 piezas durante 5 turnos.' },
+  { name: 'Cambiar pieza', desc: 'Cambia la pieza actual por otra al azar.' },
+  { name: 'Ralentizar', desc: 'Caída a mitad de velocidad durante 10 s.' },
+  { name: 'Deshacer', desc: 'Revierte la última colocación (no los puntos).' },
+  { name: 'Reservar', desc: 'Aparta la pieza actual; vuelve en el siguiente turno.' },
+];
+
 const PIECES = [
   null,
   [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], // I
@@ -110,6 +126,18 @@ const challengeTimerEl = document.getElementById('challenge-timer');
 const challengeWarnEl = document.getElementById('challenge-warn');
 
 let challenge = null, challengeTime = 0, garbageAccum = 0, completed = [];
+const peekCanvas = document.getElementById('peek-canvas');
+const peekCtx = peekCanvas.getContext('2d');
+const holdCanvas = document.getElementById('hold-canvas');
+const holdCtx = holdCanvas.getContext('2d');
+const skillsToggle = document.getElementById('skills-toggle');
+const skillsEl = document.getElementById('skills');
+const skillListEl = document.getElementById('skill-list');
+const energyFillEl = document.getElementById('energy-fill');
+const energyTextEl = document.getElementById('energy-text');
+const skillStatusEl = document.getElementById('skill-status');
+
+let skillsEnabled = true, energy, queue, peekLeft, slowLeft, held, undoStack;
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let bigPiecesEnabled = true;
 let powerupsEnabled = true, powerPending, nextPowerAt, freezeLeft;
@@ -120,8 +148,14 @@ function createBoard() {
 }
 
 // Líneas hasta el siguiente power-up: disminuye con el nivel (más frecuente)
+// Si las habilidades también están activas, ambos sistemas aparecen con menos frecuencia
 function powerInterval() {
-  return Math.max(3, 10 - level);
+  const base = Math.max(3, 10 - level);
+  return skillsEnabled ? Math.ceil(base * 1.5) : base;
+}
+
+function energyPerLine() {
+  return powerupsEnabled ? ENERGY_PER_LINE - 1 : ENERGY_PER_LINE;
 }
 
 // Tablero con bloques fijos: 6 filas inferiores con huecos en diagonal
@@ -281,6 +315,7 @@ function scoreLock(cleared, tspin) {
 function addLines(cleared) {
   if (!cleared) return;
   lines += cleared;
+  if (skillsEnabled) energy = Math.min(ENERGY_MAX, energy + cleared * energyPerLine());
   level = Math.floor(lines / 10) + (challenge?.baseLevel || 1);
   dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   if (lines >= nextPowerAt) {
@@ -361,19 +396,37 @@ function softDrop() {
 
 function lockPiece() {
   const tspin = isTSpin();
+  const snap = { board: board.map(row => [...row]), piece: freshPiece(current), lines, energy };
   let cleared = 0;
   if (current.power) cleared += applyPower();
   else merge();
   cleared += clearLines();
   scoreLock(cleared, tspin);
+  snap.gained = Math.max(0, energy - snap.energy);
+  undoStack.push(snap);
+  if (undoStack.length > UNDO_DEPTH) undoStack.shift();
   lastMoveWasRotation = false;
   if (challenge?.lines && lines >= challenge.lines) { endGame(true); return; }
   spawn();
 }
 
+// Pieza en su estado inicial (sin rotar y arriba), conservando tipo y power-up
+function freshPiece(p) {
+  const shape = p.power ? [[p.type]] : PIECES[p.type].map(row => [...row]);
+  const x = p.power ? Math.floor(COLS / 2) : Math.floor(COLS / 2) - Math.floor(shape[0].length / 2);
+  return { type: p.type, power: p.power, shape, x, y: 0 };
+}
+
+function advanceQueue() {
+  current = queue.shift();
+  queue.push(randomPiece());
+  next = queue[0];
+}
+
 function spawn() {
-  current = next;
-  next = randomPiece();
+  if (held) { current = held; current.returned = true; held = null; } // la reservada vuelve tras un turno
+  else advanceQueue();
+  if (peekLeft > 0) peekLeft--;
   // Rotación inversa: solo desde el nivel indicado y de forma aleatoria
   current.inverted = !!challenge?.reverseFromLevel && level >= challenge.reverseFromLevel && Math.random() < 0.5;
   if (collide(current.shape, current.x, current.y)) {
@@ -390,7 +443,84 @@ function updateHUD() {
   freezeEl.classList.toggle('hidden', freezeLeft <= 0);
   freezeEl.textContent = `❄ ${Math.ceil(freezeLeft / 1000)}s`;
   comboEl.textContent = features.combo && comboCount > 1 ? `COMBO x${comboCount}` : '';
+  updateSkillsHUD();
   updateChallengeHUD();
+}
+
+// ---- Habilidades ----
+function charges() {
+  return Math.floor(energy / ENERGY_COST);
+}
+
+function renderSkills() {
+  skillListEl.textContent = '';
+  SKILLS.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'skill-btn';
+    btn.title = s.desc;
+    btn.textContent = `${i + 1}. ${s.name}`;
+    btn.addEventListener('click', () => { useSkill(i); btn.blur(); });
+    skillListEl.appendChild(btn);
+  });
+}
+
+function updateSkillsHUD() {
+  skillsEl.classList.toggle('disabled', !skillsEnabled);
+  if (!skillsEnabled) return;
+  const full = energy >= ENERGY_MAX;
+  energyFillEl.style.width = full ? '100%' : `${((energy % ENERGY_COST) / ENERGY_COST) * 100}%`;
+  energyTextEl.textContent = `Cargas: ${charges()} · 3 líneas = 1 carga`;
+  const ready = charges() > 0 && !paused && !gameOver;
+  skillListEl.childNodes.forEach(btn => { btn.disabled = !ready; });
+  const st = [];
+  if (peekLeft > 0) st.push(`👁 ${peekLeft} turnos`);
+  if (slowLeft > 0) st.push(`🐢 ${Math.ceil(slowLeft / 1000)}s`);
+  skillStatusEl.textContent = st.join(' · ');
+  peekCanvas.classList.toggle('hidden', peekLeft <= 0);
+  holdCanvas.classList.toggle('hidden', !held);
+}
+
+function useSkill(i) {
+  if (!skillsEnabled || paused || gameOver || charges() < 1) return;
+  let ok = false;
+  switch (i) {
+    case 0: peekLeft = PEEK_TURNS; ok = true; break;
+    case 1: { // cambia por una pieza aleatoria; si no cabe, no se gasta
+      const p = randomPiece();
+      p.inverted = current.inverted;
+      if (!collide(p.shape, p.x, p.y)) { current = p; lastMoveWasRotation = false; ok = true; }
+      break;
+    }
+    case 2: slowLeft = SLOW_MS; ok = true; break;
+    case 3: { // revierte tablero y líneas, no los puntos
+      const snap = undoStack.pop();
+      if (!snap) break;
+      board = snap.board;
+      lines = snap.lines;
+      level = Math.floor(lines / 10) + (challenge?.baseLevel || 1);
+      dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+      energy = Math.max(0, energy - snap.gained);
+      if (current.returned) held = freshPiece(current); // venía de la reserva: vuelve a ella
+      else { queue.unshift(freshPiece(current)); queue.pop(); next = queue[0]; }
+      current = snap.piece;
+      comboCount = 0;
+      ok = true;
+      break;
+    }
+    case 4: // aparta la pieza actual un turno
+      if (held) break;
+      held = freshPiece(current);
+      advanceQueue();
+      if (collide(current.shape, current.x, current.y)) endGame();
+      ok = true;
+      break;
+  }
+  if (!ok) return;
+  energy -= ENERGY_COST;
+  drawNext();
+  updateHUD();
+  if (!gameOver) draw();
 }
 
 function fmtTime(ms) {
@@ -577,6 +707,23 @@ function drawNext() {
       drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB, 1, glyphOf(next));
   nextNameEl.textContent = next.power ? `Power-up: ${POWERS[next.power].name}` : '';
   nextDescEl.textContent = next.power ? POWERS[next.power].desc : '';
+  drawMini(peekCtx, peekCanvas, peekLeft > 0 ? queue.slice(0, PEEK_TURNS) : [], 12, 48);
+  drawMini(holdCtx, holdCanvas, held ? [held] : [], 12, 48);
+}
+
+// Dibuja piezas pequeñas apiladas en vertical (cola de vista previa / reserva)
+function drawMini(context, cv, pieces, size, slot) {
+  context.clearRect(0, 0, cv.width, cv.height);
+  pieces.forEach((p, i) => {
+    const offX = Math.floor((4 - p.shape[0].length) / 2);
+    const offY = Math.floor((4 - p.shape.length) / 2);
+    context.save();
+    context.translate(6, i * slot + 0);
+    for (let r = 0; r < p.shape.length; r++)
+      for (let c = 0; c < p.shape[r].length; c++)
+        drawBlock(context, offX + c, offY + r, p.shape[r][c], size, 1, glyphOf(p));
+    context.restore();
+  });
 }
 
 function endGame(win = false, title = 'GAME OVER') {
@@ -670,7 +817,11 @@ function loop(ts) {
     updateChallengeHUD();
     if (gameOver) return;
   }
-  if (dropAccum >= dropInterval) {
+  if (slowLeft > 0) {
+    slowLeft = Math.max(0, slowLeft - dt);
+    updateSkillsHUD();
+  }
+  if (dropAccum >= (slowLeft > 0 ? dropInterval * 2 : dropInterval)) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
       current.y++;
@@ -704,7 +855,13 @@ function init() {
   lastMoveWasRotation = false;
   comboMsgEl.classList.remove('show');
   lastTime = performance.now();
-  next = randomPiece();
+  energy = 0;
+  peekLeft = 0;
+  slowLeft = 0;
+  held = null;
+  undoStack = [];
+  queue = Array.from({ length: PEEK_TURNS + 1 }, randomPiece);
+  next = queue[0];
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
@@ -716,6 +873,7 @@ document.addEventListener('keydown', e => {
   if (e.target === playerNameEl) return;
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
+  if (/^(Digit|Numpad)[1-5]$/.test(e.code)) { useSkill(Number(e.code.slice(-1)) - 1); return; }
   switch (e.code) {
     case 'ArrowLeft':
       if (!collide(current.shape, current.x - 1, current.y)) { current.x--; lastMoveWasRotation = false; }
@@ -769,6 +927,17 @@ powerToggle.addEventListener('change', () => {
   try { localStorage.setItem(POWERUPS_KEY, String(powerupsEnabled)); } catch (e) { /* ignorar */ }
   powerToggle.blur(); // evita que Space cambie la casilla durante el juego
 });
+
+skillsToggle.addEventListener('change', () => {
+  skillsEnabled = skillsToggle.checked;
+  try { localStorage.setItem(SKILLS_KEY, String(skillsEnabled)); } catch (e) { /* ignorar */ }
+  updateHUD();
+  skillsToggle.blur();
+});
+
+try { skillsEnabled = localStorage.getItem(SKILLS_KEY) !== 'false'; } catch (e) { /* ignorar */ }
+skillsToggle.checked = skillsEnabled;
+renderSkills();
 
 bigToggle.addEventListener('change', () => {
   bigPiecesEnabled = bigToggle.checked;
