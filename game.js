@@ -105,6 +105,8 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
+const reserveCanvas = document.getElementById('reserve-canvas');
+const reserveCtx = reserveCanvas.getContext('2d');
 const nextNameEl = document.getElementById('next-name');
 const nextDescEl = document.getElementById('next-desc');
 const freezeEl = document.getElementById('freeze');
@@ -139,6 +141,7 @@ const skillStatusEl = document.getElementById('skill-status');
 
 let skillsEnabled = true, energy, queue, peekLeft, slowLeft, held, undoStack;
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let reserve = null, reserveLocked = false; // Hold: pieza guardada (C / Shift) y bloqueo hasta asentar la actual
 let bigPiecesEnabled = true;
 let powerupsEnabled = true, powerPending, nextPowerAt, freezeLeft;
 let comboCount, b2bActive, lastMoveWasRotation, muted = false, audioCtx, msgTimer;
@@ -406,6 +409,7 @@ function lockPiece() {
   undoStack.push(snap);
   if (undoStack.length > UNDO_DEPTH) undoStack.shift();
   lastMoveWasRotation = false;
+  reserveLocked = false;
   if (challenge?.lines && lines >= challenge.lines) { endGame(true); return; }
   spawn();
 }
@@ -432,6 +436,27 @@ function spawn() {
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
+  drawNext();
+  updateHUD();
+}
+
+// Hold: guarda la pieza actual (también power-ups) o la intercambia; una vez por pieza
+function holdPiece() {
+  if (reserveLocked) return;
+  const stored = freshPiece(current);
+  if (reserve) {
+    const incoming = freshPiece(reserve);
+    if (collide(incoming.shape, incoming.x, incoming.y)) return;
+    current = incoming;
+  } else {
+    advanceQueue();
+  }
+  reserve = stored;
+  reserveLocked = true;
+  current.inverted = !!challenge?.reverseFromLevel && level >= challenge.reverseFromLevel && Math.random() < 0.5;
+  lastMoveWasRotation = false;
+  dropAccum = 0;
+  if (collide(current.shape, current.x, current.y)) endGame();
   drawNext();
   updateHUD();
 }
@@ -709,6 +734,21 @@ function drawNext() {
   nextDescEl.textContent = next.power ? POWERS[next.power].desc : '';
   drawMini(peekCtx, peekCanvas, peekLeft > 0 ? queue.slice(0, PEEK_TURNS) : [], 12, 48);
   drawMini(holdCtx, holdCanvas, held ? [held] : [], 12, 48);
+  drawReserve();
+}
+
+function drawReserve() {
+  const NB = 30;
+  reserveCtx.clearRect(0, 0, reserveCanvas.width, reserveCanvas.height);
+  if (reserve) {
+    const shape = reserve.shape;
+    const offX = Math.floor((4 - shape[0].length) / 2);
+    const offY = Math.floor((4 - shape.length) / 2);
+    for (let r = 0; r < shape.length; r++)
+      for (let c = 0; c < shape[r].length; c++)
+        drawBlock(reserveCtx, offX + c, offY + r, shape[r][c], NB, 1, glyphOf(reserve));
+  }
+  reserveCanvas.classList.toggle('hold-locked', reserveLocked);
 }
 
 // Dibuja piezas pequeñas apiladas en vertical (cola de vista previa / reserva)
@@ -859,6 +899,8 @@ function init() {
   peekLeft = 0;
   slowLeft = 0;
   held = null;
+  reserve = null;
+  reserveLocked = false;
   undoStack = [];
   queue = Array.from({ length: PEEK_TURNS + 1 }, randomPiece);
   next = queue[0];
@@ -887,6 +929,11 @@ document.addEventListener('keydown', e => {
     case 'ArrowUp':
     case 'KeyX':
       tryRotate();
+      break;
+    case 'KeyC':
+    case 'ShiftLeft':
+    case 'ShiftRight':
+      holdPiece();
       break;
     case 'Space':
       e.preventDefault();
