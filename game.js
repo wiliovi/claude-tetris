@@ -30,6 +30,7 @@ const POWERS = {
 const POWER_KEYS = Object.keys(POWERS);
 const FREEZE_MS = 5000;
 const POWERUPS_KEY = 'tetris-powerups';
+const BIGPIECES_KEY = 'tetris-bigpieces';
 
 const PIECES = [
   null,
@@ -62,7 +63,7 @@ const features = { combo: true, tspin: true, b2b: true, perfect: true };
 const CHALLENGES_KEY = 'tetris-challenges';
 const GARBAGE_MS = 10000;
 const CHALLENGES = [
-  { id: 'sprint', name: 'Sprint', goal: 'Limpia 40 líneas en 2 minutos', lines: 40, timeLimit: 120000 },
+  { id: 'sprint', name: 'Sprint', goal: 'Limpia 10 líneas en 2 minutos', lines: 10, timeLimit: 120000 },
   { id: 'garbage', name: 'Basura', goal: 'Sobrevive 90 s con basura cada 10 s', surviveMs: 90000, garbage: true },
   { id: 'fixed', name: 'Bloques fijos', goal: 'Limpia 15 líneas con el tablero pre-cargado', lines: 15, preset: true },
   { id: 'invisible', name: 'Invisibles', goal: 'Limpia 10 líneas: lo apilado se vuelve invisible', lines: 10, invisible: true },
@@ -92,6 +93,7 @@ const nextNameEl = document.getElementById('next-name');
 const nextDescEl = document.getElementById('next-desc');
 const freezeEl = document.getElementById('freeze');
 const powerToggle = document.getElementById('powerup-toggle');
+const bigToggle = document.getElementById('big-toggle');
 const comboEl = document.getElementById('combo');
 const comboMsgEl = document.getElementById('combo-msg');
 const muteBtn = document.getElementById('mute-btn');
@@ -109,6 +111,7 @@ const challengeWarnEl = document.getElementById('challenge-warn');
 
 let challenge = null, challengeTime = 0, garbageAccum = 0, completed = [];
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let bigPiecesEnabled = true;
 let powerupsEnabled = true, powerPending, nextPowerAt, freezeLeft;
 let comboCount, b2bActive, lastMoveWasRotation, muted = false, audioCtx, msgTimer;
 
@@ -116,9 +119,9 @@ function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
-// Líneas hasta el siguiente power-up: aumenta con el nivel (menos frecuente)
+// Líneas hasta el siguiente power-up: disminuye con el nivel (más frecuente)
 function powerInterval() {
-  return Math.min(12, 3 + level);
+  return Math.max(3, 10 - level);
 }
 
 // Tablero con bloques fijos: 6 filas inferiores con huecos en diagonal
@@ -155,11 +158,12 @@ function glyphOf(piece) {
 }
 
 function randomPiece() {
-  if (powerupsEnabled && !challenge && powerPending) {
+  if (powerupsEnabled && challenge?.id === 'reverse' && powerPending) {
     powerPending = false;
     return powerPiece();
   }
-  const type = Math.floor(Math.random() * (PIECES.length - 1)) + 1;
+  const count = bigPiecesEnabled ? PIECES.length - 1 : PIECES.length - 2; // la 3x3 es la última
+  const type = Math.floor(Math.random() * count) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -765,6 +769,15 @@ powerToggle.addEventListener('change', () => {
   try { localStorage.setItem(POWERUPS_KEY, String(powerupsEnabled)); } catch (e) { /* ignorar */ }
   powerToggle.blur(); // evita que Space cambie la casilla durante el juego
 });
+
+bigToggle.addEventListener('change', () => {
+  bigPiecesEnabled = bigToggle.checked;
+  try { localStorage.setItem(BIGPIECES_KEY, String(bigPiecesEnabled)); } catch (e) { /* ignorar */ }
+  bigToggle.blur(); // evita que Space cambie la casilla durante el juego
+});
+
+try { bigPiecesEnabled = localStorage.getItem(BIGPIECES_KEY) !== 'false'; } catch (e) { /* ignorar */ }
+bigToggle.checked = bigPiecesEnabled;
 
 try { Object.assign(features, JSON.parse(localStorage.getItem(FEATURES_KEY)) || {}); } catch (e) { /* ignorar */ }
 try { powerupsEnabled = localStorage.getItem(POWERUPS_KEY) !== 'false'; } catch (e) { /* ignorar */ }
