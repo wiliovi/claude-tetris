@@ -205,11 +205,20 @@ body {
   letter-spacing: 1px;
 }
 
-#next-canvas {
+#next-canvas,
+#reserve-canvas {
   display: block;
   border: 1px solid var(--border);
   background: var(--canvas-bg);
   border-radius: 4px;
+}
+
+#reserve-canvas {
+  transition: opacity 0.15s;
+}
+
+#reserve-canvas.hold-locked {
+  opacity: 0.35;
 }
 
 /* ---- Controles ---- */
