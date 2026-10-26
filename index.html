@@ -27,6 +27,10 @@
           <input type="checkbox" id="powerup-toggle" checked />
           <span>Power-ups</span>
         </label>
+        <label class="powerup-option">
+          <input type="checkbox" id="skills-toggle" checked />
+          <span>Habilidades</span>
+        </label>
         <span class="freeze hidden" id="freeze"></span>
         <span class="combo-count" id="combo"></span>
         <div class="features">
@@ -35,6 +39,14 @@
           <label class="powerup-option"><input type="checkbox" data-feature="tspin" checked /><span>T-spin</span></label>
           <label class="powerup-option"><input type="checkbox" data-feature="b2b" checked /><span>Back-to-Back</span></label>
           <label class="powerup-option"><input type="checkbox" data-feature="perfect" checked /><span>Perfect Clear</span></label>
+        </div>
+        <div class="skills" id="skills">
+          <span class="label">HABILIDADES</span>
+          <div class="energy-bar"><div class="energy-fill" id="energy-fill"></div></div>
+          <span class="energy-text" id="energy-text"></span>
+          <div class="skill-list" id="skill-list"></div>
+          <span class="skill-status" id="skill-status"></span>
+          <canvas id="hold-canvas" width="60" height="60" class="hidden"></canvas>
         </div>
         <button id="mute-btn" class="mute-btn" type="button" aria-pressed="false">🔊 Sonido</button>
       </aside>
@@ -76,6 +88,7 @@
               <li><kbd>↑</kbd> rotar</li>
               <li><kbd>↓</kbd> bajar</li>
               <li><kbd>Space</kbd> caída</li>
+              <li><kbd>1</kbd>–<kbd>5</kbd> habilidad</li>
               <li><kbd>P</kbd> pausa</li>
             </ul>
           </div>
@@ -86,6 +99,7 @@
           <canvas id="next-canvas" width="120" height="120"></canvas>
           <span class="next-name" id="next-name"></span>
           <span class="next-desc" id="next-desc"></span>
+          <canvas id="peek-canvas" width="60" height="240" class="hidden"></canvas>
         </div>
       </aside>
 

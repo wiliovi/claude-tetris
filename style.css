@@ -458,3 +458,46 @@ kbd {
   color: var(--danger);
   font-weight: 700;
 }
+
+/* ---- Habilidades cargables ---- */
+.skills {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.skills.disabled { display: none; }
+.energy-bar {
+  height: 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--canvas-bg);
+  overflow: hidden;
+}
+.energy-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+.energy-text, .skill-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.skill-list { display: flex; flex-direction: column; gap: 4px; }
+.skill-btn {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 6px;
+  font-size: 0.75rem;
+  text-align: left;
+  color: var(--text);
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.skill-btn:disabled { opacity: 0.4; cursor: default; }
+#peek-canvas, #hold-canvas { background: var(--canvas-bg); border: 1px solid var(--border); border-radius: 4px; }
+#peek-canvas.hidden, #hold-canvas.hidden { display: none; }
