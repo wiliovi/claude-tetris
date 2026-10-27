@@ -134,6 +134,18 @@ body {
   background: var(--canvas-bg);
   border-radius: 4px;
   box-shadow: 0 0 40px var(--board-shadow);
+  touch-action: none; /* los gestos táctiles no deben desplazar ni ampliar la página */
+}
+
+.touch-help {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.touch-help.hidden {
+  display: none;
 }
 
 /* ---- Panel lateral ---- */
