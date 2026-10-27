@@ -34,6 +34,7 @@ const BIGPIECES_KEY = 'tetris-bigpieces';
 
 // Habilidades cargables: la energía se mide en cuartos de línea; cada habilidad cuesta 3 líneas
 const SKILLS_KEY = 'tetris-skills';
+const TOUCH_KEY = 'tetris-touch';
 const ENERGY_PER_LINE = 4;
 const ENERGY_COST = 3 * ENERGY_PER_LINE;
 const ENERGY_MAX = 5 * ENERGY_COST;
@@ -911,6 +912,13 @@ function init() {
   animId = requestAnimationFrame(loop);
 }
 
+function moveHorizontal(dx) {
+  if (collide(current.shape, current.x + dx, current.y)) return false;
+  current.x += dx;
+  lastMoveWasRotation = false;
+  return true;
+}
+
 document.addEventListener('keydown', e => {
   if (e.target === playerNameEl) return;
   if (e.code === 'KeyP') { togglePause(); return; }
@@ -918,10 +926,10 @@ document.addEventListener('keydown', e => {
   if (/^(Digit|Numpad)[1-5]$/.test(e.code)) { useSkill(Number(e.code.slice(-1)) - 1); return; }
   switch (e.code) {
     case 'ArrowLeft':
-      if (!collide(current.shape, current.x - 1, current.y)) { current.x--; lastMoveWasRotation = false; }
+      moveHorizontal(-1);
       break;
     case 'ArrowRight':
-      if (!collide(current.shape, current.x + 1, current.y)) { current.x++; lastMoveWasRotation = false; }
+      moveHorizontal(1);
       break;
     case 'ArrowDown':
       softDrop();
@@ -942,6 +950,101 @@ document.addEventListener('keydown', e => {
   }
   updateHUD();
 });
+
+// ---- Control táctil ----
+const touchToggle = document.getElementById('touch-toggle');
+const touchHelp = document.getElementById('touch-help');
+const TAP_WINDOW = 300;   // ms para agrupar toques consecutivos
+const DRAG_MIN = 10;      // px antes de considerar que es un arrastre
+const SWIPE_UP_MIN = 50;  // px hacia arriba para reservar
+let touchEnabled = false;
+let touchGesture = null, tapCount = 0, tapTimer = null;
+
+function boardPoint(e) {
+  const r = canvas.getBoundingClientRect();
+  return { col: (e.clientX - r.left) / r.width * COLS, row: (e.clientY - r.top) / r.height * ROWS, cellW: r.width / COLS };
+}
+
+function onPiece(pt) {
+  // margen de media casilla para facilitar el toque en piezas pequeñas
+  const m = 0.5;
+  return current.shape.some((rowCells, r) => rowCells.some((v, c) => v &&
+    pt.col >= current.x + c - m && pt.col <= current.x + c + 1 + m &&
+    pt.row >= current.y + r - m && pt.row <= current.y + r + 1 + m));
+}
+
+function applyTouchAction(fn) {
+  if (paused || gameOver || !current) return;
+  fn();
+  updateHUD();
+}
+
+canvas.addEventListener('pointerdown', e => {
+  if (!touchEnabled || paused || gameOver || !current) return;
+  const pt = boardPoint(e);
+  if (!onPiece(pt)) { touchGesture = null; return; }
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignorar */ }
+  touchGesture = { id: e.pointerId, x0: e.clientX, y0: e.clientY, col0: current.x, cellW: pt.cellW, moved: false, held: false };
+});
+
+canvas.addEventListener('pointermove', e => {
+  const g = touchGesture;
+  if (!g || g.id !== e.pointerId || paused || gameOver || g.held) return;
+  const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+  if (dy < -SWIPE_UP_MIN && -dy > Math.abs(dx) * 1.5 && !g.moved) {
+    g.held = true;
+    applyTouchAction(holdPiece);
+    return;
+  }
+  if (Math.abs(dx) > DRAG_MIN) g.moved = true;
+  if (!g.moved) return;
+  const target = g.col0 + Math.round(dx / g.cellW);
+  let changed = false;
+  while (current.x < target && moveHorizontal(1)) changed = true;
+  while (current.x > target && moveHorizontal(-1)) changed = true;
+  if (changed) updateHUD();
+});
+
+function endTouch(e) {
+  const g = touchGesture;
+  if (!g || g.id !== e.pointerId) return;
+  touchGesture = null;
+  if (g.moved || g.held || e.type === 'pointercancel') return;
+  if (Math.abs(e.clientY - g.y0) > DRAG_MIN * 2) return;
+  // toque simple: contar toques consecutivos (2 = rotar, 3 = caída libre)
+  tapCount++;
+  clearTimeout(tapTimer);
+  if (tapCount >= 3) {
+    tapCount = 0;
+    applyTouchAction(hardDrop);
+  } else {
+    tapTimer = setTimeout(() => {
+      if (tapCount === 2) applyTouchAction(tryRotate);
+      tapCount = 0;
+    }, TAP_WINDOW);
+  }
+}
+canvas.addEventListener('pointerup', endTouch);
+canvas.addEventListener('pointercancel', endTouch);
+
+function applyTouch(enabled) {
+  touchEnabled = enabled;
+  touchToggle.checked = enabled;
+  touchHelp.classList.toggle('hidden', !enabled);
+}
+
+touchToggle.addEventListener('change', () => {
+  applyTouch(touchToggle.checked);
+  try { localStorage.setItem(TOUCH_KEY, String(touchEnabled)); } catch (e) { /* ignorar */ }
+  touchToggle.blur();
+});
+
+// sin preferencia guardada, se activa solo en dispositivos táctiles
+let savedTouch = null;
+try { savedTouch = localStorage.getItem(TOUCH_KEY); } catch (e) { /* ignorar */ }
+applyTouch(savedTouch !== null ? savedTouch === 'true'
+  : (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0));
 
 restartBtn.addEventListener('click', () => {
   if (paused && !gameOver) togglePause(); // en pausa: reanudar sin reiniciar
