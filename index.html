@@ -10,12 +10,6 @@
   <div class="wrapper">
     <h1 class="title">TETRIS</h1>
 
-    <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Cambiar a modo claro">
-      <span>Oscuro</span>
-      <span class="switch"></span>
-      <span>Claro</span>
-    </button>
-
     <div class="game-area">
     <div class="game-container">
       <aside class="panel panel-left">
@@ -49,6 +43,11 @@
           <canvas id="hold-canvas" width="60" height="60" class="hidden"></canvas>
         </div>
         <button id="mute-btn" class="mute-btn" type="button" aria-pressed="false">🔊 Sonido</button>
+        <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Cambiar a modo claro">
+          <span>Oscuro</span>
+          <span class="switch"></span>
+          <span>Claro</span>
+        </button>
       </aside>
 
       <div class="board-wrap">
@@ -95,17 +94,20 @@
           </div>
         </div>
 
-        <div class="panel-section">
-          <span class="label">NEXT</span>
-          <canvas id="next-canvas" width="120" height="120"></canvas>
-          <span class="next-name" id="next-name"></span>
-          <span class="next-desc" id="next-desc"></span>
-          <canvas id="peek-canvas" width="60" height="240" class="hidden"></canvas>
-        </div>
+        <div class="next-hold">
+          <div class="panel-section">
+            <span class="label">NEXT</span>
+            <canvas id="next-canvas" width="120" height="120"></canvas>
+            <span class="next-name" id="next-name"></span>
+            <span class="next-desc" id="next-desc"></span>
+            <canvas id="peek-canvas" width="60" height="240" class="hidden"></canvas>
+          </div>
 
-        <div class="panel-section">
-          <span class="label">HOLD</span>
-          <canvas id="reserve-canvas" width="120" height="120"></canvas>
+          <div class="panel-section">
+            <span class="label">HOLD</span>
+            <canvas id="reserve-canvas" width="120" height="120"></canvas>
+            <span class="next-desc hold-desc">Pulsa C o Shift para guardar la pieza actual y cambiarla. Una vez por pieza.</span>
+          </div>
         </div>
       </aside>
 

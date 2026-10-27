@@ -79,6 +79,8 @@ body {
   color: var(--muted);
   font-size: 12px;
   cursor: pointer;
+  margin-top: 4px;
+  padding: 0;
 }
 
 .theme-toggle .switch {
@@ -136,7 +138,7 @@ body {
 
 /* ---- Panel lateral ---- */
 .panel {
-  width: 250px;
+  width: 290px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -175,6 +177,12 @@ body {
 .panel-top {
   display: flex;
   gap: 16px;
+  align-items: flex-start;
+}
+
+.next-hold {
+  display: flex;
+  gap: 14px;
   align-items: flex-start;
 }
 
@@ -315,7 +323,7 @@ kbd {
 
 .next-name,
 .next-desc {
-  max-width: 210px;
+  max-width: 120px;
   text-align: left;
   overflow-wrap: break-word;
 }
