@@ -571,3 +571,25 @@ kbd {
 @media (pointer: coarse) {
   .controls { display: none; }
 }
+
+/* ---- Móvil: nada debe exceder el ancho de la pantalla ---- */
+@media (max-width: 760px) {
+  body { padding: 8px; }
+
+  .wrapper,
+  .game-area,
+  .game-container { width: 100%; min-width: 0; }
+
+  .panel,
+  .panel-left,
+  .panel-right,
+  .panel-challenge {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .panel-top,
+  .next-hold { flex-wrap: wrap; }
+
+  .challenge-list { min-width: 0; }
+}
